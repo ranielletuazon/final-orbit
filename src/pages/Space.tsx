@@ -1,11 +1,17 @@
 import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { auth, db } from "../components/firebase/firebase";
-import { getDoc, doc } from "firebase/firestore";
+import { getDoc, doc, collection, getDocs} from "firebase/firestore";
 import { toast } from "sonner";
 import styles from './css/Space.module.css';
 import { set } from "firebase/database";
+
+import game2 from '../assets/dota.jpg'
+import game3 from '../assets/minecraft.jpg'
+import game4 from '../assets/league.jpeg'
+import player from '../assets/bunja.webp'
 import valorant from '../assets/tejo.png'
+
 
 import Header from '../components/Header';
 
@@ -18,8 +24,11 @@ export default function Space({ user }: { user: any }) {
         emailConsent?: boolean;
     }
     const [currentUser, setCurrentUser] = useState<UserData | null>(null);
-
+    const [suggested, setSuggested] = useState<string[]>([]);
+    const [playerData, setPlayerData] = useState<any[]>([]);
     const [completeLoad, setCompleteLoad] = useState(true);
+
+    const test: boolean = false;
 
     const [isLoading, setIsLoading] = useState(false);
 
@@ -32,7 +41,7 @@ export default function Space({ user }: { user: any }) {
                 auth.signOut()
             ),{
                 loading: 'Logging out...',
-                success: 'Successfully logged out!',
+                success: 'Logged out!',
                 error: 'An error occured while logging out. Please try again.'
             }
         )
@@ -62,6 +71,73 @@ export default function Space({ user }: { user: any }) {
         fetchUserData();
         setCompleteLoad(false);
     }, [navigate]);
+
+    // Get random 5
+    useEffect(() => {
+        const fetchData = async () => {
+          try {
+            // Check if data was fetched today
+            const lastFetched = localStorage.getItem("lastFetched");
+            const today = new Date().toLocaleDateString(); // Format as "MM/DD/YYYY"
+    
+            // If data was fetched today, load it from localStorage
+            if (lastFetched === today) {
+              const storedPlayerData = localStorage.getItem("playerData");
+              if (storedPlayerData) {
+                setPlayerData(JSON.parse(storedPlayerData));
+                console.log("Using cached player data.");
+                return;
+              }
+            }
+    
+            // Fetching the user documents from Firestore
+            const playersSnap = await getDocs(collection(db, "users"));
+            const playersList = playersSnap.docs.map((doc) => ({
+              id: doc.id,
+              ...doc.data(),
+            }));
+    
+            // Selecting 5 random players
+            const randomFive: string[] = [];
+            while (randomFive.length < 5 && playersList.length > randomFive.length) {
+              const randomId = playersList[Math.floor(Math.random() * playersList.length)].id;
+              if (!randomFive.includes(randomId)) {
+                randomFive.push(randomId);
+              }
+            }
+    
+            setSuggested(randomFive);
+            console.log("Suggested Players:", randomFive);
+    
+            // Fetching player data for the selected random player IDs
+            const playersData = await Promise.all(randomFive.map(async (uid) => {
+              const playerDocRef = doc(db, "users", uid);
+              const playerSnap = await getDoc(playerDocRef);
+    
+              if (playerSnap.exists()) {
+                return playerSnap.data();
+              } else {
+                return null;
+              }
+            }));
+    
+            // Filter out any null values if a player doesn't have data
+            const filteredPlayersData = playersData.filter((player): player is any => player !== null);
+    
+            setPlayerData(filteredPlayersData);
+            console.log("Player Data:", filteredPlayersData);
+    
+            // Store the player data and the current date in localStorage
+            localStorage.setItem("playerData", JSON.stringify(filteredPlayersData));
+            localStorage.setItem("lastFetched", today);
+          } catch (error) {
+            console.error("Error fetching players:", error);
+          }
+        };
+    
+        fetchData();
+        console.log(playerData);
+      }, []);
     
     return(
         <>
@@ -75,6 +151,7 @@ export default function Space({ user }: { user: any }) {
                                 <div className={styles.sideButtons}>
                                     <button className="fa-solid fa-bell"></button>
                                     <button className="fa-solid fa-comment-dots"></button>
+                                    <button className="fa-solid fa-user-group"></button>
                                 </div>
                             </div>
                             <div className={styles.gameSection}>
@@ -102,10 +179,37 @@ export default function Space({ user }: { user: any }) {
                                     </div>
                                 </div>
                                 <div className={styles.box}>
-                                    <div className={styles.sampleline}></div>
-                                    <div className={styles.sampleline}></div>
-                                    <div className={styles.sampleline}></div>
+                                    <div className={styles.gameBox}>
+                                        <img src={game2} alt="Game" className={styles.gameboximage}/>
+                                        <div className={styles.gameboxtitle}>Dota 2</div>
+                                        <div className={styles.gameboxplayercount}>20 players</div>
+                                        <div className={styles.view}><i className="fa-solid fa-eye"></i> View</div>
+                                    </div>
+                                    <div className={styles.gameBox}>
+                                        <img src={game3} alt="Game" className={styles.gameboximage}/>
+                                        <div className={styles.gameboxtitle}>Minecraft</div>
+                                        <div className={styles.gameboxplayercount}>15 players</div>
+                                        <div className={styles.view}><i className="fa-solid fa-eye"></i> View</div>
+                                    </div>
                                 </div>
+                            </div>
+                            <div className={styles.userHeader}>Players for You Today</div>
+                            <div className={styles.playerSection}> {/* Maximum of 5 */}
+                                { playerData && playerData.map((item, index) => (
+                                    <div key={index} className={styles.playerDisplay} style={{backgroundImage: `url(${item.profileImage})`}}>
+                                        <div className={styles.playerDescription}>
+                                            <div className={styles.playerUsername}><b>{item.username}</b></div>
+                                            <div className={styles.playerGender}>{item.gender}</div>
+                                            <div className={styles.playerGames}>{item.games}</div>
+                                        </div>
+                                    </div>
+                                ))}
+                                {/* <div className={styles.playerDisplay} style={{backgroundImage: `url(${player})`}}>
+                                    <div className={styles.playerDescription}>
+                                        <div className={styles.playerUsername}><b>Bunja</b> 25</div>
+                                        <div className={styles.playerGames}>Valorant</div>
+                                    </div>
+                                </div> */}
                             </div>
                         </div>
                     </div>
